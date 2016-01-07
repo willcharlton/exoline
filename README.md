@@ -930,3 +930,4 @@ What's New?
 -----------
 
 For information about what features are in what Exoline versions look [here](HISTORY.md).
+
