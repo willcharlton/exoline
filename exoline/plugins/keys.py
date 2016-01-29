@@ -8,6 +8,10 @@ Usage:
     exo [options] keys show <name>
     exo [options] keys clean
     exo [options] keys wipe
+    exo [options] keys setvendor <vendor>
+    exo [options] keys settoken <vendortoken>
+    exo [options] keys showvendor
+    exo [options] keys showtoken
 
 Command Options:
     --hack                 This option hacks the gibson.
@@ -18,6 +22,35 @@ Command Options:
 import ruamel.yaml as yaml
 import os, re
 from pyonep.exceptions import OnePlatformException
+
+class Keys():
+    def __init__(self, config_option):
+        try:
+            with open(config_option.configfile) as f:
+                self.config = yaml.load(f, yaml.RoundTripLoader)
+                if self.config['keys'] is None:
+                    self.config['keys'] = {}
+        except IOError as ex:
+            self.config = {'keys': {}}
+    def show(self, name):
+        return self.config['keys'][name]
+
+class Vendor():
+    def __init__(self, config_option):
+        try:
+            with open(config_option.configfile) as f:
+                self.config = yaml.load(f, yaml.RoundTripLoader)
+                if self.config['vendor'] is None:
+                    self.config['vendor'] = ''
+                if self.config['vendortoken'] is None:
+                    self.config['vendortoken'] = ''
+        except IOError as ex:
+            self.config = {'keys': {}}
+    def showvendor(self):
+        return self.config['vendor']
+    def showtoken(self):
+        return self.config['vendortoken']
+
 
 class Plugin():
     regex_rid = re.compile("[0-9a-fA-F]{40}$")
@@ -34,13 +67,8 @@ class Plugin():
             # needs a config file.
             raise ExoException('config file was not found: {0}'.format(
                 config_option.askedconfigfile))
-        try:
-            with open(config_option.configfile) as f:
-                config = yaml.load(f, yaml.RoundTripLoader)
-                if config['keys'] is None:
-                    config['keys'] = {}
-        except IOError as ex:
-            config = {'keys': {}}
+        o_keys = Keys(config_option)
+        o_vend = Vendor(config_option)
 
         if len(args['<args>']) > 0:
             subcommand = args['<args>'][0]
@@ -55,32 +83,32 @@ class Plugin():
                 print("{0} is not a valid cik".format(cik))
                 return
 
-            config['keys'][name] = cik
+            o_keys.config['keys'][name] = cik
 
             if args.get('--comment', False):
-                config['keys'].yaml_add_eol_comment(args['--comment'], name)
+                o_keys.config['keys'].yaml_add_eol_comment(args['--comment'], name)
 
             print("Added `{0}: {1}` to {2}".format(name, cik, config_option.configfile))
         elif subcommand == "rm":
             name = args["<name>"]
 
-            if config['keys'].get(name, None) == None:
+            if o_keys.config['keys'].get(name, None) == None:
                 print("That key does not exist.")
                 return
 
-            del config['keys'][name]
+            del o_keys.config['keys'][name]
         elif subcommand == "show":
             name = args["<name>"]
-            print("{0}: {1}".format(name, config['keys'][name]))
+            print("{0}: {1}".format(name, o_keys.show(name)))
         elif subcommand == "wipe":
-            del config['keys']
-            config['keys'] = {}
+            del o_keys.config['keys']
+            o_keys.config['keys'] = {}
         elif subcommand == "clean":
             to_trim = []
-            for name in config['keys']:
+            for name in o_keys.config['keys']:
                 try:
                     print("Checking {0}...".format(name)),
-                    rpc.info(config['keys'][name], {'alias': ''}, {'basic': True})
+                    rpc.info(o_keys.config['keys'][name], {'alias': ''}, {'basic': True})
                     print("OK")
                 except OnePlatformException as e:
                     to_trim.append(name)
@@ -88,10 +116,22 @@ class Plugin():
 
             if len(to_trim) > 0:
                 for name in to_trim:
-                    del config['keys'][name]
+                    del o_keys.config['keys'][name]
+        elif subcommand == "setvendor":
+            vendor = args["<vendor>"]
+            o_keys.config['vendor'] = vendor
+            print("Set vendor to {0}".format(vendor))
+        elif subcommand == "settoken":
+            vendor = args["<vendor>"]
+            o_keys.config['vendor'] = vendor
+            print("Set vendor to {0}".format(vendor))
+        elif subcommand == "showvendor":
+            print("{0}".format(o_vendor.showvendor()))
+        elif subcommand == "showtoken":
+            print("{0}".format(o_vendor.showtoken()))
         else:
-            if len(config.get("keys", {})) > 0:
-                print(" ".join(map(str, config.get("keys", {}).keys())))
+            if len(o_keys.config.get("keys", {})) > 0:
+                print(" ".join(map(str, o_keys.config.get("keys", {}).keys())))
 
         with open(config_option.configfile, 'w') as f:
-            f.write(yaml.dump(config, Dumper=yaml.RoundTripDumper))
+            f.write(yaml.dump(o_keys.config, Dumper=yaml.RoundTripDumper))
